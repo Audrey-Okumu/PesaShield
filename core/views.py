@@ -41,19 +41,19 @@ def handle_ussd_flow(phone_number: str, text: str, user):
 
     levels = text.split('*')
     action = levels[0]
-    last_choice = levels[-1]  # always get the latest input
+    last_choice = levels[-1]
 
     # ==================== REGISTRATION ====================
     if not user or not user.name or not user.pin_hash:
         if len(levels) == 1 and action == "1":
             return "CON Enter your full name:"
-        if len(levels) == 2:   # Name entered
+        if len(levels) == 2:  # Name entered
             name = levels[1].strip()
             if len(name) < 3:
                 return "CON Name too short. Enter full name again:"
             UserProfile.objects.create(phone_number=phone_number, name=name)
             return "CON Name saved!\nEnter 4-digit PIN:"
-        if len(levels) == 3:   # PIN entered
+        if len(levels) == 3:  # PIN entered
             pin_hash = levels[2]
             if len(pin_hash) != 4 or not pin_hash.isdigit():
                 return "CON Invalid PIN. Enter 4 digits only:"
@@ -93,7 +93,6 @@ def handle_ussd_flow(phone_number: str, text: str, user):
 
     # ==================== MAIN MENU ====================
     if user and user.total_balance > 0:
-        # Determine if user is at main menu (first level after login)
         is_main_menu = len(levels) == 1
 
         if last_choice == "0":
@@ -106,12 +105,22 @@ def handle_ussd_flow(phone_number: str, text: str, user):
             return check_balance(user)
         elif last_choice == "2":
             return view_budget(user)
-        elif last_choice == "3":
-            return "CON Log Expense\nExample: Food 300 or Matatu 100"
+        elif "3" in levels:
+            expense_index = levels.index("3")
+
+            # User just selected "3" from the menu
+            if len(levels) == expense_index + 1:
+                return ("CON Log Expense\n"
+                "Example: (Food 300 or Matatu 100)\n"
+                "0. Back to Menu")
+
+            # User entered an expense after selecting 3
+            expense_text = levels[expense_index + 1]
+            return log_expense(user, expense_text)
         elif last_choice == "4":
-            return "CON Adjust Budget (coming soon)"
+            return "CON Adjust Budget (coming soon)\n0. Back to Menu"
         elif last_choice == "5":
-            return "CON Get AI Advice\nReply with expense or question"
+            return "CON Get AI Advice\nReply with expense or question\n0. Back to Menu"
         else:
             return show_main_menu(user)
 
@@ -150,6 +159,94 @@ def view_budget(user):
             f"Other (10%): KSh {user.other:.0f}\n\n"
             "0. Back to Menu")
 
+
+# ====================== STEP 5: NEW FUNCTIONS ======================
+def log_expense(user, expense_text: str):
+    """Log expense, auto-deduct from category, and show warnings"""
+    if not expense_text or ' ' not in expense_text:
+        return "CON Invalid format.\nUse: Food 300\nExample: Matatu 100\n0. Back to Menu"
+
+    try:
+        parts = expense_text.rsplit(' ', 1)
+        item = parts[0].strip().lower()
+        amount = Decimal(parts[1])
+
+        if amount <= 0:
+            return "CON Amount must be greater than 0\n0. Back to Menu"
+
+        category = detect_category(item)
+        field_name = get_category_field(category)
+
+        current = getattr(user, field_name, Decimal('0'))
+
+        if current < amount:
+            return f"CON Not enough in {category}!\nOnly KSh {current:.0f} left.\n0. Back to Menu"
+
+        # Auto deduct
+        setattr(user, field_name, current - amount)
+        user.save()
+
+        warning = get_low_budget_warning(user, field_name)
+
+        msg = f"CON Logged successfully!\n{category}: -KSh {amount:.0f}\n"
+        msg += f"{category} left: KSh {getattr(user, field_name):.0f}\n"
+
+        if warning:
+            msg += f"\n⚠️ {warning}"
+
+        msg += "\n0. Back to Menu"
+        return msg
+
+    except:
+        return "CON Invalid format.\nUse: Food 300 or Mama mboga 150\n0. Back to Menu"
+
+
+def detect_category(text: str) -> str:
+    text = text.lower()
+    if any(k in text for k in ['food', 'mboga', 'chai', 'mandazi', 'lunch', 'dinner', 'kuinama']):
+        return "Food"
+    if any(k in text for k in ['matatu', 'transport', 'fare', 'boda', 'bus']):
+        return "Transport"
+    if any(k in text for k in ['hostel', 'rent', 'accommodation', 'room']):
+        return "Accommodation"
+    if any(k in text for k in ['airtime', 'data']):
+        return "Other"
+    # Fallback to Gemini AI
+    if gemini_model:
+        try:
+            prompt = f"Classify this expense into one category: Food, Accommodation, Transport, Savings, Other. Expense: '{text}'"
+            resp = gemini_model.generate_content(prompt)
+            cat = resp.text.strip().lower()
+            if 'food' in cat: return "Food"
+            if 'accommodation' in cat or 'hostel' in cat: return "Accommodation"
+            if 'transport' in cat: return "Transport"
+            if 'savings' in cat: return "Savings"
+            return "Other"
+        except:
+            pass
+    return "Other"
+
+
+def get_category_field(category: str) -> str:
+    mapping = {
+        "Food": "food",
+        "Accommodation": "accommodation",
+        "Transport": "transport",
+        "Savings": "savings",
+        "Other": "other"
+    }
+    return mapping.get(category, "other")
+
+
+def get_low_budget_warning(user, field_name: str) -> str:
+    balance = getattr(user, field_name, Decimal('0'))
+    if balance <= 0:
+        return "This category is now empty!"
+    elif balance < 1000:
+        return "Running very low! Spend wisely."
+    elif balance < 3000:
+        return "Consider spending less here."
+    return ""
 
 
 def get_gemini_advice(text: str, user=None):
