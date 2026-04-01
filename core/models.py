@@ -4,7 +4,7 @@ import hashlib
 class UserProfile(models.Model):
     phone_number = models.CharField(max_length=15, unique=True)
     name = models.CharField(max_length=100, blank=True)
-    pin_hash = models.CharField(max_length=64)  # SHA-256 hash of 4-digit PIN
+    pin_hash = models.CharField(max_length=64, blank=True, default='')  # SHA-256 hash of 4-digit PIN
     total_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     
     # Budget categories (remaining balances)
