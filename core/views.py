@@ -99,15 +99,14 @@ def handle_ussd_flow(phone_number: str, text: str, user):
 
     # ==================== MAIN MENU (Step 6 updates here) ====================
     if user and user.total_balance > 0:
-        is_main_menu = len(levels) == 1
-
+        # If user presses "0"
         if last_choice == "0":
-            if is_main_menu:
+            # If user is at main menu (first level is empty or "0"), log them out
+            if len(levels) <= 2:
                 return "END You have been logged out. Dial again to use PesaShield."
             else:
-                return show_main_menu(user)   # Improved: always return to main menu on 0
-            
-                    # Always handle Adjust Budget first to avoid conflicts
+                # If user is in a submenu, go back to main menu
+                return show_main_menu(user)
         if "4" in levels:
             return handle_adjust_budget(user, levels)
 
