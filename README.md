@@ -12,7 +12,9 @@ Helps students manage their HELB upkeep money wisely — track expenses, get aut
 - Most students use feature phones or have limited data on campus.
 - No easy way to track spending or get gentle reminders before money finishes.
 
-**PesaShield** turns passive HELB inflows into proactive money management using just a USSD code (`*shortcode#`).
+**PesaShield** turns passive HELB inflows into proactive money management using just a USSD code (`*384*19592#`).
+
+![USSD main menu](images/main_menu.png)
 
 ---
 
@@ -27,6 +29,8 @@ Helps students manage their HELB upkeep money wisely — track expenses, get aut
 - **Guardian Advice** — Get helpful tips and category suggestions
 - **Check Balance & View Budget** — Real-time overview
 - **Works on any phone** — Fully USSD-based (no data required)
+
+![View Budget](images/view_budget.png)
 
 ---
 
